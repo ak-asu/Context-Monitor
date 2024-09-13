@@ -6,21 +6,21 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [DataDao::class], version = 1)
-@TypeConverters(DataConverters::class)
-abstract class Storagedb : RoomDatabase() {
+@Database(entities = [DataEntity::class], version = 1, exportSchema = false)
+@TypeConverters(DateConverters::class, MapStringIntConverter::class)
+abstract class StorageDB : RoomDatabase() {
 
     abstract fun dataDao(): DataDao
 
     companion object {
         @Volatile
-        private var INSTANCE: Storagedb? = null
+        private var INSTANCE: StorageDB? = null
 
-        fun getDatabase(context: Context): Storagedb {
+        fun getDatabase(context: Context): StorageDB {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
-                    Storagedb::class.java,
+                    StorageDB::class.java,
                     "health_database"
                 ).build()
                 INSTANCE = instance

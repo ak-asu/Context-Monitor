@@ -4,18 +4,16 @@ import kotlin.math.abs
 import kotlin.math.pow
 
 fun respiratoryRateCalculator(
-    accelValuesX: MutableList<Float>,
-    accelValuesY: MutableList<Float>,
-    accelValuesZ: MutableList<Float>,
+    accelValues: MutableList<FloatArray>
 ): Int {
     var previousValue: Float
     var currentValue: Float
     previousValue = 10f
     var k = 0
-    for (i in 11..<accelValuesY.size) {
+    for (i in 11..<accelValues.size) {
         currentValue = kotlin.math.sqrt(
-            accelValuesZ[i].toDouble().pow(2.0) + accelValuesX[i].toDouble()
-                .pow(2.0) + accelValuesY[i].toDouble().pow(2.0)
+            accelValues[i][2].toDouble().pow(2.0) + accelValues[i][0].toDouble()
+                .pow(2.0) + accelValues[i][1].toDouble().pow(2.0)
         ).toFloat()
         if (abs(x = previousValue - currentValue) > 0.15) {
             k++

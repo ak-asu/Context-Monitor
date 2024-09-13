@@ -11,17 +11,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.akheparasu.contextmonitor.R
 import com.akheparasu.contextmonitor.storage.DataEntity
-import com.akheparasu.contextmonitor.storage.Storagedb
+import com.akheparasu.contextmonitor.storage.StorageDB
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.util.Date
 
 @Composable
-fun ViewSymptomsScreen(viewModel: SymptomViewModel) {
+fun ViewSymptomsScreen(viewModel: SymptomViewModel, padding: PaddingValues) {
     // Get the context from the Composable
     val context = LocalContext.current
     // Load the string array from resources
@@ -39,7 +41,7 @@ fun ViewSymptomsScreen(viewModel: SymptomViewModel) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(padding),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(records.size) { record ->
@@ -58,7 +60,7 @@ fun ViewSymptomsScreen(viewModel: SymptomViewModel) {
 }
 
 class SymptomViewModel(application: Application) : AndroidViewModel(application) {
-    private val dataDao = Storagedb.getDatabase(application).dataDao()
+    private val dataDao = StorageDB.getDatabase(application).dataDao()
 
     // StateFlow to hold the records
     private val _records = MutableStateFlow<List<DataEntity>>(emptyList())
@@ -71,5 +73,17 @@ class SymptomViewModel(application: Application) : AndroidViewModel(application)
                 _records.value = data
             }
         }
+    }
+}
+
+class SymptomViewModelFactory(
+    private val application: Application
+) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(SymptomViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return SymptomViewModel(application) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
