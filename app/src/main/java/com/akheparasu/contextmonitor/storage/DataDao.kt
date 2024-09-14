@@ -10,6 +10,6 @@ interface DataDao {
     @Insert
     suspend fun insertRow(dataEntity: DataEntity)
 
-    @Query("SELECT * FROM health_data")
+    @Query("SELECT * FROM health_datatable")
     fun getAllRows(): Flow<List<DataEntity>>
 }

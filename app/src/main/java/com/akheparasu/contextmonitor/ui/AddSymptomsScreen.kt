@@ -21,7 +21,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
@@ -32,52 +31,42 @@ import androidx.navigation.NavHostController
 import com.akheparasu.contextmonitor.R
 import com.akheparasu.contextmonitor.storage.DataEntity
 import com.akheparasu.contextmonitor.storage.StorageDB
-import com.akheparasu.contextmonitor.ui.theme.ContextMonitorTheme
 import kotlinx.coroutines.launch
 import java.util.Date
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddSymptomsScreen(
     navController: NavHostController,
-    viewModel: SymptomAddModel,
+    viewModel: AddSymptomsViewModel,
     padding: PaddingValues,
-    heartRate: Float,
-    respiratoryRate: Float
+    heartRate: Int,
+    respiratoryRate: Int
 ) {
     // Get the context from the Composable
     val context = LocalContext.current
-    // Load the string array from resources
-    val symptomsList = remember {
-        context.resources.getStringArray(R.array.symptoms_array).toList()
-    }
-    var symptoms by rememberSaveable { mutableStateOf(symptomsList.associateWith { 0 }) }
-    var selectedSymptom by remember { mutableStateOf(symptomsList[0]) }
-    var expanded by rememberSaveable { mutableStateOf(false) }
-
-    var pressOffset by remember {
-        mutableStateOf(DpOffset.Zero)
-    }
-    var itemHeight by remember {
-        mutableStateOf(0.dp)
-    }
-    val interactionSource = remember {
-        MutableInteractionSource()
-    }
     val density = LocalDensity.current
+    val symptomsList = context.resources.getStringArray(R.array.symptoms_array).toList()
+
+    var symptoms by rememberSaveable { mutableStateOf(symptomsList.associateWith { 0 }) }
+    var selectedSymptom by rememberSaveable { mutableStateOf(symptomsList[0]) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    var pressOffset by remember { mutableStateOf(DpOffset.Zero) }
+    var itemHeight by remember { mutableStateOf(0.dp) }
+    val interactionSource = remember { MutableInteractionSource() }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(padding),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.SpaceAround
     ) {
-        Text("Record a symptom:")
+        Text(text = "Symptom Logging Page", modifier = Modifier.padding(16.dp))
 
         Card(
             // elevation = 4.dp,
             modifier = Modifier
+                .padding(16.dp)
                 .onSizeChanged {
                     itemHeight = with(density) { it.height.toDp() }
                 }
@@ -98,7 +87,6 @@ fun AddSymptomsScreen(
                             }
                         )
                     }
-                    .padding(16.dp)
             ) {
                 Text(text = selectedSymptom)
             }
@@ -118,25 +106,29 @@ fun AddSymptomsScreen(
                 }
             }
         }
-        Text(text = "Select symptom ${symptoms[selectedSymptom]}")
+
         StarRatingBar(
             rating = symptoms.getOrDefault(selectedSymptom, 0),
-            onRatingChange = { newRating -> symptoms = symptoms.toMutableMap().apply { this[selectedSymptom] = newRating }.toMap() }
+            onRatingChange = { newRating ->
+                symptoms = symptoms
+                    .toMutableMap()
+                    .apply { this[selectedSymptom] = newRating }.toMap() }
         )
 
-        Button(onClick = {
+        Button(
+            modifier = Modifier.padding(16.dp),
+            onClick = {
             viewModel.insertSymptom(heartRate, respiratoryRate, symptoms)
             navController.popBackStack()
         }) {
-            Text("Upload Symptoms")
+            Text("UPLOAD SYMPTOMS")
         }
     }
 }
 
-class SymptomAddModel(application: Application) : AndroidViewModel(application) {
+class AddSymptomsViewModel(application: Application) : AndroidViewModel(application) {
     private val dataDao = StorageDB.getDatabase(application).dataDao()
-
-    fun insertSymptom(heartRate: Float, respiratoryRate: Float, symptoms: Map<String, Int>) {
+    fun insertSymptom(heartRate: Int, respiratoryRate: Int, symptoms: Map<String, Int>) {
         val dataEntity = DataEntity(
             heartRate = heartRate,
             respiratoryRate = respiratoryRate,
@@ -148,13 +140,13 @@ class SymptomAddModel(application: Application) : AndroidViewModel(application) 
     }
 }
 
-class SymptomAddModelFactory(
+class AddSymptomsViewModelFactory(
     private val application: Application
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(SymptomAddModel::class.java)) {
+        if (modelClass.isAssignableFrom(AddSymptomsViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return SymptomAddModel(application) as T
+            return AddSymptomsViewModel(application) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
@@ -165,7 +157,7 @@ fun StarRatingBar(
     rating: Int,
     onRatingChange: (Int) -> Unit
 ) {
-    Row {
+    Row (modifier = Modifier.padding(16.dp)) {
         for (i in 1..5) {
             val icon = if (i <= rating) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder
             Icon(

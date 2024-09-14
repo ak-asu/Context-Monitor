@@ -1,8 +1,6 @@
 package com.akheparasu.contextmonitor
 
 import android.Manifest
-import android.content.Context
-import android.hardware.SensorManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -11,40 +9,27 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
-import com.akheparasu.contextmonitor.ui.theme.ContextMonitorTheme
 import android.content.pm.PackageManager
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.camera.core.CameraSelector
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
-import com.akheparasu.contextmonitor.ui.AddSymptomsScreen
-import com.akheparasu.contextmonitor.ui.HeartRateModel
-import com.akheparasu.contextmonitor.ui.HeartRateModelFactory
-import com.akheparasu.contextmonitor.ui.RespiratoryRateModel
-import com.akheparasu.contextmonitor.ui.RespiratoryRateModelFactory
-import com.akheparasu.contextmonitor.ui.SymptomAddModel
-import com.akheparasu.contextmonitor.ui.SymptomAddModelFactory
-import com.akheparasu.contextmonitor.ui.SymptomViewModel
-import com.akheparasu.contextmonitor.ui.SymptomViewModelFactory
-import com.akheparasu.contextmonitor.ui.ViewSymptomsScreen
-import com.akheparasu.contextmonitor.utils.heartRateCalculator
-import com.akheparasu.contextmonitor.utils.respiratoryRateCalculator
+import com.akheparasu.contextmonitor.ui.*
+import com.akheparasu.contextmonitor.utils.*
+import com.akheparasu.contextmonitor.ui.theme.ContextMonitorTheme
 
 class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -56,17 +41,17 @@ class MainActivity : ComponentActivity() {
         val respiratoryRateModel: RespiratoryRateModel by viewModels {
             RespiratoryRateModelFactory(application)
         }
-        val addSymptomModel: SymptomAddModel by viewModels {
-            SymptomAddModelFactory(application)
+        val addSymptomModel: AddSymptomsViewModel by viewModels {
+            AddSymptomsViewModelFactory(application)
         }
-        val viewSymptomModel: SymptomViewModel by viewModels {
-            SymptomViewModelFactory(application)
+        val viewSymptomModel: ViewSymptomsModel by viewModels {
+            ViewSymptomsModelFactory(application)
         }
         enableEdgeToEdge()
         setContent {
             ContextMonitorTheme {
                 val navController = rememberNavController()
-                Scaffold (
+                Scaffold(
                     topBar = {
                         TopAppBar(
                             title = { Text(getString(R.string.app_name)) }
@@ -79,19 +64,20 @@ class MainActivity : ComponentActivity() {
                                 navController = navController,
                                 heartRateModel = heartRateModel,
                                 respiratoryRateModel = respiratoryRateModel,
-                                padding = padding)
+                                padding = padding
+                            )
                         }
                         composable("second/{heartRate}/{respiratoryRate}") { backStackEntry ->
-                            val heartRat = backStackEntry.arguments?.getString("heartRate")
-                            val respiratoryRate = backStackEntry.arguments?.getString("respiratoryRate")
-                            val heartRate = 0f
+                            val heartRate = backStackEntry.arguments?.getInt("heartRate")
+                            val respiratoryRate =
+                                backStackEntry.arguments?.getInt("respiratoryRate")
                             if (heartRate != null && respiratoryRate != null) {
                                 AddSymptomsScreen(
                                     navController = navController,
                                     viewModel = addSymptomModel,
                                     padding = padding,
-                                    heartRate = heartRate.toFloat(),
-                                    respiratoryRate = respiratoryRate.toFloat()
+                                    heartRate = heartRate,
+                                    respiratoryRate = respiratoryRate
                                 )
                             }
                         }
@@ -111,88 +97,126 @@ fun ContextMonitorApp(
     padding: PaddingValues
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    var heartRate by remember { mutableStateOf<Float?>(null) }
-    var respiratoryRate by remember { mutableStateOf<Float?>(null) }
+    var heartRate by rememberSaveable { mutableStateOf<Int?>(null) }
+    var respiratoryRate by rememberSaveable { mutableStateOf<Int?>(null) }
 
-    val isCollecting by remember { respiratoryRateModel.isCollecting }
-    val accelerometerValues = respiratoryRateModel.accelerometerValues
+    var isCalculatingRR by rememberSaveable { mutableStateOf(false) }
+    var isCollectingRR by rememberSaveable { mutableStateOf(false) }
 
-    if (!isCollecting && accelerometerValues.isNotEmpty()) {
-        respiratoryRate = respiratoryRateCalculator(accelerometerValues).toFloat()
+    if (!isCollectingRR
+        && respiratoryRateModel.accelerometerValues.isNotEmpty()
+        && respiratoryRate == null
+    ) {
+        respiratoryRate = respiratoryRateCalculator(respiratoryRateModel.accelerometerValues)
     }
 
-//    if (!isRecording && accelerometerValues.isNotEmpty()) {
-//        respiratoryRate = respiratoryRateCalculator(accelerometerValues).toFloat()
-//    }
-
-    val hasCameraPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+    val hasCameraPermission = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.CAMERA
+    ) == PackageManager.PERMISSION_GRANTED
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            // heartRate = viewModel.measureHeartRate()
+
         }
     }
-    val lifecycleOwner = LocalLifecycleOwner.current
-    var isRecording by remember { mutableStateOf(false) }
+    var isRecordingHR by rememberSaveable { mutableStateOf(false) }
+    var isCalculatingHR by rememberSaveable { mutableStateOf(false) }
+    var videoUri by rememberSaveable { mutableStateOf<Uri?>(null) }
 
+    LaunchedEffect(videoUri) {
+        if (videoUri != null) {
+            heartRate = heartRateCalculator(videoUri!!, context.contentResolver)
+            isCalculatingHR = false
+        }
+    }
     // Register and unregister sensor listener
-//    DisposableEffect(sensorManager) {
+//    DisposableEffect(SensorManager) {
 //        accelerometer?.let { sensor ->
 //            sensorManager.registerListener(sensorEventListener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
 //        }
 //        onDispose {
-//            sensorManager?.unregisterListener(sensorEventListener)
+//            respiratoryRateModelsensorManager?.unregisterListener(sensorEventListener)
 //        }
 //    }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(padding),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.SpaceAround
     ) {
-        Text(text = "Heart Rate: ${heartRate ?: "Not measured"}")
-        Button(onClick = {
-            if (!hasCameraPermission) {
-                permissionLauncher.launch(Manifest.permission.CAMERA)
-            } else {
-                if (!isRecording) {
-                    isRecording = true
-                }
-            }
-        }) {
-            Text("Measure Heart Rate")
-        }
-
-// Camera preview using CameraX PreviewView
-        if (isRecording) {
-            AndroidView(
-                factory = { context ->
-                    PreviewView(context).apply {
-                        // Start the camera capture when the view is created
-                        heartRateModel.startVideoCapture(
-                            lifecycleOwner = lifecycleOwner,
-                            surfaceProvider = surfaceProvider
-                        )
-                        heartRateModel.startRecording()
+        AndroidView(
+            factory = { context ->
+                PreviewView(context).apply {
+                    // Start the camera capture when the view is created
+                    if (isRecordingHR) {
+                    heartRateModel.startVideoCapture(
+                        contentResolver = context.contentResolver,
+                        lifecycleOwner = lifecycleOwner,
+                        surfaceProvider = surfaceProvider
+                    ) { uri ->
+                        videoUri = uri
+                        isRecordingHR = false
+                        isCalculatingHR = true
+                        Toast.makeText(context, "Video saved to: $uri", Toast.LENGTH_LONG).show()
                     }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
+                    }
+                }
+            },
+            modifier = Modifier
+                .size(64.dp)
+                .padding(vertical = 4.dp)
+        )
+        Text(
+            text = "Heart Rate: " +
+                    if (isRecordingHR) {
+                        "Recording..."
+                    } else if (isCalculatingHR) {
+                        "Calculating..."
+                    } else {
+                        heartRate?.toString() ?: "Not measured"
+                    },
+            modifier = Modifier.padding(vertical = 4.dp)
+        )
+        Button(
+            onClick = {
+                if (!hasCameraPermission) {
+                    permissionLauncher.launch(Manifest.permission.CAMERA)
+                } else {
+                    if (!isRecordingHR) {
+                        isRecordingHR = true
+                    }
+                }
+            },
+            modifier = Modifier.padding(vertical = 4.dp)
+        ) {
+            Text("MEASURE HEART RATE")
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(text = "Respiratory Rate: ${respiratoryRate ?: "Not measured"}")
+        Text(
+            text = "Respiratory Rate: " +
+                    if (isCollectingRR) {
+                        "Collecting..."
+                    } else if (isCalculatingRR) {
+                        "Calculating..."
+                    } else {
+                        respiratoryRate?.toString() ?: "Not measured"
+                    }
+        )
         Button(onClick = {
-            if (isCollecting) {
+            if (isCollectingRR) {
                 respiratoryRateModel.clearValues()
-                accelerometerValues.clear()
             }
             respiratoryRateModel.startAccelerometerDataCapture()
         }) {
-            Text("Measure Respiratory Rate")
+            Text("MEASURE RESPIRATORY RATE")
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -200,7 +224,7 @@ fun ContextMonitorApp(
         Button(onClick = {
             navController.navigate("second/$heartRate/$respiratoryRate")
         }) {
-            Text("Record Symptoms")
+            Text("UPLOAD SIGNS")
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -208,19 +232,7 @@ fun ContextMonitorApp(
         Button(onClick = {
             navController.navigate("third")
         }) {
-            Text("See Symptoms")
+            Text("SYMPTOMS")
         }
     }
 }
-
-//@Preview(showBackground = true)
-//@Composable
-//fun ContextMonitorAppPreview() {
-//    ContextMonitorTheme {
-//        ContextMonitorApp(
-//            viewModel = MainViewModel(),
-//            navController = rememberNavController(),
-//            padding = PaddingValues(16.dp)
-//        )
-//    }
-//}
