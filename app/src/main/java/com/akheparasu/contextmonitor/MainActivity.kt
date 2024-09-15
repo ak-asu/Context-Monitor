@@ -41,6 +41,8 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // AndroidViewModel is a ViewModel subclass that provides access to the application
+        // context, useful for context-dependent operations and dependency injection.
         val heartRateModel: HeartRateModel by viewModels {
             HeartRateModelFactory(application)
         }
@@ -86,6 +88,11 @@ class MainActivity : ComponentActivity() {
                                     heartRate = heartRate,
                                     respiratoryRate = respiratoryRate
                                 )
+                            } else {
+                                Snackbar(
+                                    modifier = Modifier.padding(16.dp),
+                                    content = { Text("Incomplete data provided.") }
+                                )
                             }
                         }
                         composable("third") { ViewSymptomsScreen(viewSymptomModel, padding) }
@@ -112,9 +119,13 @@ fun ContextMonitorApp(
         ?.getStateFlow("add_symptoms_screen_popped", false)
         ?.collectAsState()
 
+    // rememberSaveable retains state across configuration changes and process death, while
+    // remember only retains state during recompositions.
     var heartRate by rememberSaveable { mutableStateOf<Int?>(null) }
     var respiratoryRate by rememberSaveable { mutableStateOf<Int?>(null) }
     addSymptomsScreenPopped?.value?.let { hasPopped ->
+        // When database entry has been added, new request for heart rate and
+        // respiratory rate should be shown
         if (hasPopped) {
             heartRate = null
             respiratoryRate = null
@@ -126,18 +137,12 @@ fun ContextMonitorApp(
         }
     }
 
-    val hasCameraAndStoragePermissions by remember {
-        derivedStateOf {
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.CAMERA
-            ) == PackageManager.PERMISSION_GRANTED
-        }
-    }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions.values.all { it }) {
+            Toast.makeText(context, "Permissions granted. Try again", Toast.LENGTH_LONG).show()
+        } else {
             Toast.makeText(context, "Required permissions are not granted", Toast.LENGTH_LONG)
                 .show()
         }
@@ -177,6 +182,7 @@ fun ContextMonitorApp(
         0
     }
 
+    // For consistent calculations, orientation is fixed when collecting data
     val activity = LocalContext.current as Activity
     if (isCollectingHR || isCollectingRR) {
         activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
@@ -258,19 +264,19 @@ fun ContextMonitorApp(
         )
         Button(
             onClick = {
-                if (!hasCameraAndStoragePermissions) {
-                    permissionLauncher.launch(
-                        arrayOf(
-                            Manifest.permission.CAMERA
-                        )
-                    )
+                if (ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.CAMERA
+                    ) != PackageManager.PERMISSION_GRANTED) {
+                    permissionLauncher.launch(arrayOf(Manifest.permission.CAMERA))
                 } else {
                     isCollectingHR = true
                     videoUri = null
                     heartRate = null
                 }
             },
-            enabled = !isCollectingHR && isCalculatingHR == null && !isCollectingRR && isCalculatingRR == null,
+            enabled = !isCollectingHR && isCalculatingHR == null
+                    && !isCollectingRR && isCalculatingRR == null,
             modifier = Modifier.padding(vertical = 1.dp)
         ) {
             Text("MEASURE HEART RATE")
@@ -294,7 +300,8 @@ fun ContextMonitorApp(
                 respiratoryRate = null
                 respiratoryRateModel.startAccelerometerDataCapture()
             },
-            enabled = !isCollectingHR && isCalculatingHR == null && !isCollectingRR && isCalculatingRR == null,
+            enabled = !isCollectingHR && isCalculatingHR == null
+                    && !isCollectingRR && isCalculatingRR == null,
             modifier = Modifier.padding(vertical = 1.dp)
         ) {
             Text("MEASURE RESPIRATORY RATE")
@@ -315,7 +322,8 @@ fun ContextMonitorApp(
         Button(
             onClick = { navController.navigate("third") },
             modifier = Modifier.padding(vertical = 1.dp),
-            enabled = !isCollectingHR && isCalculatingHR == null && !isCollectingRR && isCalculatingRR == null,
+            enabled = !isCollectingHR && isCalculatingHR == null
+                    && !isCollectingRR && isCalculatingRR == null,
         ) {
             Text("VIEW PAST RECORDS")
         }

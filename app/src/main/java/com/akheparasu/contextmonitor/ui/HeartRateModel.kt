@@ -19,6 +19,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.akheparasu.contextmonitor.utils.MAX_PROGRESS
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -33,7 +34,6 @@ class HeartRateModel(application: Application) : AndroidViewModel(application) {
 
     val progress = mutableIntStateOf(0)
 
-    // Start camera and video capture
     fun startVideoCapture(
         contentResolver: ContentResolver,
         surfaceProvider: SurfaceProvider,
@@ -60,12 +60,11 @@ class HeartRateModel(application: Application) : AndroidViewModel(application) {
                 )
                 startRecording(contentResolver, onVideoRecorded)
             } catch (exc: Exception) {
-                Log.e("VideoCapture", "Failed to capture: ${exc.message}", exc)
+                Log.e("HeartRateCapture", "Failed to capture: ${exc.message}", exc)
             }
         }, ContextCompat.getMainExecutor(context))
     }
 
-    // Start video recording
     private fun startRecording(contentResolver: ContentResolver, onVideoRecorded: (Uri?) -> Unit) {
         val context = getApplication<Application>().applicationContext
         videoCapture?.let { videoCapture ->
@@ -87,13 +86,13 @@ class HeartRateModel(application: Application) : AndroidViewModel(application) {
                     handleVideoRecordEvent(recordEvent, onVideoRecorded)
                 }
             viewModelScope.launch(Dispatchers.Main) {
-                while (progress.intValue < 5) {
+                while (progress.intValue < MAX_PROGRESS) {
                     delay(1000)
                     progress.intValue += 1
                 }
                 stopRecording()
             }
-        } ?: Log.e("VideoCapture", "videoCapture is null, cannot start recording")
+        } ?: Log.e("HeartRateCapture", "videoCapture is null, cannot start recording")
     }
 
     private fun handleVideoRecordEvent(
@@ -102,7 +101,7 @@ class HeartRateModel(application: Application) : AndroidViewModel(application) {
     ) {
         when (recordEvent) {
             is VideoRecordEvent.Start -> {
-                Log.d("VideoCapture", "Recording started")
+                Log.d("HeartRateCapture", "Recording started")
             }
             is VideoRecordEvent.Finalize -> {
                 val outputUri = if (recordEvent.outputResults.outputUri != Uri.EMPTY) {
@@ -111,27 +110,24 @@ class HeartRateModel(application: Application) : AndroidViewModel(application) {
                     null
                 }
                 onVideoRecorded(outputUri)
-                stopCamera() // Unbind camera after recording finishes
+                stopCamera()
             }
         }
     }
 
-    // Stop recording
     private fun stopRecording() {
         recording?.stop()
         recording = null
-        camera?.cameraControl?.enableTorch(false) // Disable torch
+        camera?.cameraControl?.enableTorch(false)
         stopCamera()
     }
 
-    // Stop and unbind the camera
     private fun stopCamera() {
         cameraProvider?.unbindAll()
         cameraProvider = null
         camera = null
     }
 
-    // Proper cleanup to release camera resources
     override fun onCleared() {
         super.onCleared()
         stopRecording()
