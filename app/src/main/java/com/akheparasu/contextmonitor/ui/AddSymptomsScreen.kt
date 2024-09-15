@@ -12,8 +12,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -34,6 +34,7 @@ import androidx.navigation.NavHostController
 import com.akheparasu.contextmonitor.R
 import com.akheparasu.contextmonitor.storage.DataEntity
 import com.akheparasu.contextmonitor.storage.StorageDB
+import com.akheparasu.contextmonitor.utils.SPACER_HEIGHT
 import kotlinx.coroutines.launch
 import java.util.Date
 
@@ -99,8 +100,7 @@ fun AddSymptomsScreen(
                     Text(text = selectedSymptom, modifier = Modifier.padding(8.dp))
                     Icon(
                         imageVector = Icons.Filled.ArrowDropDown,
-                        contentDescription = "Star",
-                        tint = Color.Yellow,
+                        contentDescription = "Drop Down",
                         modifier = Modifier
                             .size(48.dp)
                             .padding(8.dp)
@@ -124,7 +124,7 @@ fun AddSymptomsScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(SPACER_HEIGHT.dp))
 
         StarRatingBar(
             rating = symptoms.getOrDefault(selectedSymptom, 0),
@@ -135,12 +135,16 @@ fun AddSymptomsScreen(
             }
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(SPACER_HEIGHT.dp))
 
         Button(
             modifier = Modifier.padding(vertical = 4.dp),
             onClick = {
                 viewModel.insertSymptom(heartRate, respiratoryRate, symptoms)
+                navController
+                    .previousBackStackEntry
+                    ?.savedStateHandle
+                    ?.set("add_symptoms_screen_popped", true)
                 navController.popBackStack()
             }) {
             Text("UPLOAD SYMPTOMS")
@@ -182,11 +186,11 @@ fun StarRatingBar(
 ) {
     Row(modifier = Modifier.padding(4.dp)) {
         for (i in 1..5) {
-            val icon = if (i <= rating) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder
+            val icon = if (i <= rating) Icons.Filled.Star else Icons.Filled.StarBorder
             Icon(
                 imageVector = icon,
                 contentDescription = "Star $i",
-                tint = Color.Yellow,
+                tint = Color.Magenta,
                 modifier = Modifier
                     .clickable { onRatingChange(i) }
                     .size(24.dp)

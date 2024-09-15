@@ -5,8 +5,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
@@ -32,20 +37,28 @@ fun ViewSymptomsScreen(viewModel: ViewSymptomsModel, padding: PaddingValues) {
         modifier = Modifier
             .fillMaxSize()
             .padding(padding),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         items(records.size) { record ->
-            Text(text = "Signs $record")
-            Text(text = "Recorded On: ${records[record].recordedOn}")
-            Text(text = "Heart Rate: ${records[record].heartRate}")
-            Text(text = "Respiratory Rate: ${records[record].respiratoryRate}")
-            Text(text = "Symptoms:")
-            Column {
-                symptomsList
-                    .filter { value -> records[record].symptoms[value] != 0 }
-                    .forEach { value ->
-                        Text(text = " - $value : ${records[record].symptoms[value]}")
+            Card {
+                DisplayText("Recorded On: ", records[record].recordedOn.toString())
+                DisplayText("Heart Rate: ", records[record].heartRate.toString())
+                DisplayText("Respiratory Rate: ", records[record].respiratoryRate.toString())
+                DisplayText(
+                    if (records[record].symptoms.containsValue(1)) {
+                        "Symptoms: "
+                    } else {
+                        "No Symptoms"
                     }
+                )
+                Column(modifier = Modifier.padding(horizontal = 4.dp)) {
+                    symptomsList
+                        .filter { value -> records[record].symptoms[value] != 0 }
+                        .forEach { value ->
+                            Text(text = " - $value : ${records[record].symptoms[value]}")
+                        }
+                }
             }
         }
     }
@@ -74,4 +87,22 @@ class ViewSymptomsModelFactory(
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
+}
+
+@Composable
+fun DisplayText(
+    key: String,
+    value: String? = null
+) {
+    Text(
+        text = buildAnnotatedString {
+            withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                append(key)
+            }
+            if (value != null) {
+                append(value)
+            }
+        },
+        modifier = Modifier.padding(horizontal = 4.dp)
+    )
 }

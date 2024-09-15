@@ -20,6 +20,6 @@ fun respiratoryRateCalculator(
         }
         previousValue = currentValue
     }
-    val ret = (k.toDouble() / 45.00)
+    val ret = (k.toDouble() / MAX_PROGRESS)
     return (ret * 30).toInt()
 }

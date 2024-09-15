@@ -68,6 +68,7 @@ dependencies {
     implementation libs.androidx.material3
     implementation libs.androidx.navigation.compose
     implementation libs.gson
+    implementation libs.androidx.material.icons.extended
     annotationProcessor "androidx.room:room-compiler:$room_version"
     ksp "androidx.room:room-compiler:$room_version"
     testImplementation libs.junit

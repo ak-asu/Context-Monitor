@@ -1,6 +1,8 @@
 package com.akheparasu.contextmonitor
 
 import android.Manifest
+import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,8 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.view.Surface
-import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -54,6 +54,7 @@ class MainActivity : ComponentActivity() {
             ViewSymptomsModelFactory(application)
         }
         enableEdgeToEdge()
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         setContent {
             ContextMonitorTheme {
                 val navController = rememberNavController()
@@ -66,12 +67,12 @@ class MainActivity : ComponentActivity() {
                 ) { padding ->
                     NavHost(navController, startDestination = "first") {
                         composable("first") {
-                                ContextMonitorApp(
-                                    navController = navController,
-                                    heartRateModel = heartRateModel,
-                                    respiratoryRateModel = respiratoryRateModel,
-                                    padding = padding
-                                )
+                            ContextMonitorApp(
+                                navController = navController,
+                                heartRateModel = heartRateModel,
+                                respiratoryRateModel = respiratoryRateModel,
+                                padding = padding
+                            )
                         }
                         composable("second/{heartRate}/{respiratoryRate}") { backStackEntry ->
                             val heartRate = backStackEntry.arguments?.getInt("heartRate")
@@ -105,9 +106,25 @@ fun ContextMonitorApp(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scrollState = rememberScrollState()
+    val addSymptomsScreenPopped = navController
+        .currentBackStackEntry
+        ?.savedStateHandle
+        ?.getStateFlow("add_symptoms_screen_popped", false)
+        ?.collectAsState()
 
     var heartRate by rememberSaveable { mutableStateOf<Int?>(null) }
     var respiratoryRate by rememberSaveable { mutableStateOf<Int?>(null) }
+    addSymptomsScreenPopped?.value?.let { hasPopped ->
+        if (hasPopped) {
+            heartRate = null
+            respiratoryRate = null
+            // Reset the value to avoid multiple triggers
+            navController
+                .currentBackStackEntry
+                ?.savedStateHandle
+                ?.set("add_symptoms_screen_popped", false)
+        }
+    }
 
     val hasCameraAndStoragePermissions by remember {
         derivedStateOf {
@@ -160,6 +177,13 @@ fun ContextMonitorApp(
         0
     }
 
+    val activity = LocalContext.current as Activity
+    if (isCollectingHR || isCollectingRR) {
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
+    } else {
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -171,14 +195,14 @@ fun ContextMonitorApp(
         CircularProgressIndicator(
             color = Color.DarkGray,
             trackColor = Color.Gray,
-            progress = { progress.toFloat() / 5 },
+            progress = { progress.toFloat() / MAX_PROGRESS },
             modifier = Modifier
                 .size(80.dp)
                 .padding(vertical = 1.dp),
             strokeWidth = 8.dp,
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(SPACER_HEIGHT.dp))
 
         Box(
             modifier = Modifier
@@ -187,7 +211,7 @@ fun ContextMonitorApp(
                 .padding(vertical = 1.dp)
         ) {
             if (isCollectingHR) {
-                Surface (modifier = Modifier.fillMaxSize()) {
+                Surface(modifier = Modifier.fillMaxSize()) {
                     AndroidView(
                         factory = { ctx ->
                             PreviewView(ctx).apply {
@@ -213,8 +237,7 @@ fun ContextMonitorApp(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
-            }
-            else {
+            } else {
                 Box(
                     modifier = Modifier
                         .fillMaxSize() // Set the size you want for the box
@@ -253,7 +276,7 @@ fun ContextMonitorApp(
             Text("MEASURE HEART RATE")
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(SPACER_HEIGHT.dp))
 
         Text(
             text = "Respiratory Rate: " +
@@ -270,14 +293,14 @@ fun ContextMonitorApp(
             onClick = {
                 respiratoryRate = null
                 respiratoryRateModel.startAccelerometerDataCapture()
-                      },
+            },
             enabled = !isCollectingHR && isCalculatingHR == null && !isCollectingRR && isCalculatingRR == null,
             modifier = Modifier.padding(vertical = 1.dp)
         ) {
             Text("MEASURE RESPIRATORY RATE")
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(SPACER_HEIGHT.dp))
 
         Button(
             onClick = { navController.navigate("second/$heartRate/$respiratoryRate") },
@@ -287,7 +310,7 @@ fun ContextMonitorApp(
             Text("UPLOAD SIGNS")
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(SPACER_HEIGHT.dp))
 
         Button(
             onClick = { navController.navigate("third") },
