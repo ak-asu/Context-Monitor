@@ -12,6 +12,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class RespiratoryRateModel(application: Application) : AndroidViewModel(application), SensorEventListener {
@@ -21,31 +22,49 @@ class RespiratoryRateModel(application: Application) : AndroidViewModel(applicat
     private val accelerometer: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
     val accelerometerValues = mutableStateListOf<FloatArray>() // Stores the accelerometer values
-    val isCollecting = mutableStateOf(false) // Tracks if data is being collected
+    val isCollecting = mutableStateOf(false)
+    val progress = mutableStateOf(0)// Tracks if data is being collected
+
+    init {
+        if (accelerometer == null) {
+            throw IllegalStateException("Accelerometer sensor not available on this device")
+        }
+    }
 
     // Starts capturing accelerometer data
     fun startAccelerometerDataCapture() {
-        isCollecting.value = true
-        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL)
-
-        viewModelScope.launch(Dispatchers.IO) {
-            // Stop after 45 seconds
-            kotlinx.coroutines.delay(45_000)
+        if (isCollecting.value) {
             stopAccelerometerDataCapture()
+        }
+        clearValues()
+        progress.value = 0
+        if (!isCollecting.value) {
+            isCollecting.value = true
+            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL)
+            viewModelScope.launch(Dispatchers.IO) {
+                while (progress.value < 5) {
+                    delay(1000)
+                    progress.value += 1
+                }
+                stopAccelerometerDataCapture()
+            }
         }
     }
 
     // Stops capturing accelerometer data
     private fun stopAccelerometerDataCapture() {
-        isCollecting.value = false
-        sensorManager.unregisterListener(this)
+        if (isCollecting.value) {
+            isCollecting.value = false
+            sensorManager.unregisterListener(this)
+        }
     }
 
-    // Starts capturing accelerometer data
+    // Clears the stored accelerometer values
     fun clearValues() {
         accelerometerValues.clear()
     }
 
+    // Captures the sensor data when the sensor value changes
     override fun onSensorChanged(event: SensorEvent?) {
         event?.let {
             if (it.sensor.type == Sensor.TYPE_ACCELEROMETER) {
@@ -57,6 +76,12 @@ class RespiratoryRateModel(application: Application) : AndroidViewModel(applicat
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
         // Not needed for now
+    }
+
+    // Ensures proper cleanup of sensor listener when ViewModel is destroyed
+    override fun onCleared() {
+        super.onCleared()
+        stopAccelerometerDataCapture()
     }
 }
 

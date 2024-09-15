@@ -8,7 +8,10 @@ import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
@@ -46,6 +49,7 @@ fun AddSymptomsScreen(
     val context = LocalContext.current
     val density = LocalDensity.current
     val symptomsList = context.resources.getStringArray(R.array.symptoms_array).toList()
+    val scrollState = rememberScrollState()
 
     var symptoms by rememberSaveable { mutableStateOf(symptomsList.associateWith { 0 }) }
     var selectedSymptom by rememberSaveable { mutableStateOf(symptomsList[0]) }
@@ -57,23 +61,22 @@ fun AddSymptomsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(padding),
+            .padding(padding)
+            .verticalScroll(scrollState),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceAround
+        verticalArrangement = Arrangement.Center
     ) {
-        Text(text = "Symptom Logging Page", modifier = Modifier.padding(16.dp))
-
         Card(
-            // elevation = 4.dp,
             modifier = Modifier
-                .padding(16.dp)
+                .padding(4.dp)
                 .onSizeChanged {
                     itemHeight = with(density) { it.height.toDp() }
                 }
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .height(64.dp)
+                    .width(256.dp)
                     .indication(interactionSource, LocalIndication.current)
                     .pointerInput(true) {
                         detectTapGestures(
@@ -88,7 +91,21 @@ fun AddSymptomsScreen(
                         )
                     }
             ) {
-                Text(text = selectedSymptom)
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = selectedSymptom, modifier = Modifier.padding(8.dp))
+                    Icon(
+                        imageVector = Icons.Filled.ArrowDropDown,
+                        contentDescription = "Star",
+                        tint = Color.Yellow,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .padding(8.dp)
+                    )
+                }
             }
             DropdownMenu(
                 expanded = expanded,
@@ -107,20 +124,25 @@ fun AddSymptomsScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+
         StarRatingBar(
             rating = symptoms.getOrDefault(selectedSymptom, 0),
             onRatingChange = { newRating ->
                 symptoms = symptoms
                     .toMutableMap()
-                    .apply { this[selectedSymptom] = newRating }.toMap() }
+                    .apply { this[selectedSymptom] = newRating }.toMap()
+            }
         )
 
+        Spacer(modifier = Modifier.height(8.dp))
+
         Button(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(vertical = 4.dp),
             onClick = {
-            viewModel.insertSymptom(heartRate, respiratoryRate, symptoms)
-            navController.popBackStack()
-        }) {
+                viewModel.insertSymptom(heartRate, respiratoryRate, symptoms)
+                navController.popBackStack()
+            }) {
             Text("UPLOAD SYMPTOMS")
         }
     }
@@ -133,7 +155,8 @@ class AddSymptomsViewModel(application: Application) : AndroidViewModel(applicat
             heartRate = heartRate,
             respiratoryRate = respiratoryRate,
             symptoms = symptoms,
-            recordedOn = Date())
+            recordedOn = Date()
+        )
         viewModelScope.launch {
             dataDao.insertRow(dataEntity)
         }
@@ -157,7 +180,7 @@ fun StarRatingBar(
     rating: Int,
     onRatingChange: (Int) -> Unit
 ) {
-    Row (modifier = Modifier.padding(16.dp)) {
+    Row(modifier = Modifier.padding(4.dp)) {
         for (i in 1..5) {
             val icon = if (i <= rating) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder
             Icon(

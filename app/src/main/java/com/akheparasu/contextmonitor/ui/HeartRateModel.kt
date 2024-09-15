@@ -12,8 +12,7 @@ import androidx.camera.core.Preview
 import androidx.camera.core.Preview.SurfaceProvider
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.*
-import androidx.camera.video.Recorder
-import androidx.camera.video.VideoCapture
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LifecycleOwner
@@ -30,38 +29,43 @@ class HeartRateModel(application: Application) : AndroidViewModel(application) {
     private var videoCapture: VideoCapture<Recorder>? = null
     private var recording: Recording? = null
     private var camera: Camera? = null
+    private var cameraProvider: ProcessCameraProvider? = null
 
+    val progress = mutableIntStateOf(0)
+
+    // Start camera and video capture
     fun startVideoCapture(
         contentResolver: ContentResolver,
         surfaceProvider: SurfaceProvider,
         lifecycleOwner: LifecycleOwner,
         onVideoRecorded: (Uri?) -> Unit
     ) {
+        progress.intValue = 0
         val context = getApplication<Application>().applicationContext
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
         cameraProviderFuture.addListener({
-            val cameraProvider = cameraProviderFuture.get()
-            val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(surfaceProvider)
-            }
-            val recorder = Recorder.Builder()
-                .setQualitySelector(QualitySelector.from(Quality.HIGHEST))
-                .build()
-            videoCapture = VideoCapture.withOutput(recorder)
-            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-            // Bind the camera and preview to the lifecycle
             try {
-                cameraProvider.unbindAll()
-                camera = cameraProvider.bindToLifecycle(
+                cameraProvider = cameraProviderFuture.get()
+                cameraProvider?.unbindAll() // Unbind before rebinding
+                val preview = Preview.Builder().build().also {
+                    it.setSurfaceProvider(surfaceProvider)
+                }
+                val recorder = Recorder.Builder()
+                    .setQualitySelector(QualitySelector.from(Quality.HIGHEST))
+                    .build()
+                videoCapture = VideoCapture.withOutput(recorder)
+                val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+                camera = cameraProvider?.bindToLifecycle(
                     lifecycleOwner, cameraSelector, preview, videoCapture
                 )
                 startRecording(contentResolver, onVideoRecorded)
             } catch (exc: Exception) {
-                Log.e("VideoCapture", "Camera binding failed: ${exc.message}", exc)
+                Log.e("VideoCapture", "Failed to capture: ${exc.message}", exc)
             }
         }, ContextCompat.getMainExecutor(context))
     }
 
+    // Start video recording
     private fun startRecording(contentResolver: ContentResolver, onVideoRecorded: (Uri?) -> Unit) {
         val context = getApplication<Application>().applicationContext
         videoCapture?.let { videoCapture ->
@@ -75,41 +79,63 @@ class HeartRateModel(application: Application) : AndroidViewModel(application) {
             val outputOptions = MediaStoreOutputOptions.Builder(
                 contentResolver,
                 MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-            )
-                .setContentValues(contentValues)
-                .build()
+            ).setContentValues(contentValues).build()
             camera?.cameraControl?.enableTorch(true)
-            // Start recording
             recording = videoCapture.output
                 .prepareRecording(context, outputOptions)
                 .start(ContextCompat.getMainExecutor(context)) { recordEvent ->
-                    when (recordEvent) {
-                        is VideoRecordEvent.Start -> {
-                            Log.e("VideoCapture", "started recording")
-                        }
-
-                        is VideoRecordEvent.Finalize -> {
-                            onVideoRecorded(
-                                if (recordEvent.outputResults.outputUri != Uri.EMPTY) {
-                                    recordEvent.outputResults.outputUri
-                                } else {
-                                    null
-                                }
-                            )
-                        }
-                    }
+                    handleVideoRecordEvent(recordEvent, onVideoRecorded)
                 }
             viewModelScope.launch(Dispatchers.Main) {
-                delay(45_000)
+                while (progress.intValue < 5) {
+                    delay(1000)
+                    progress.intValue += 1
+                }
                 stopRecording()
+            }
+        } ?: Log.e("VideoCapture", "videoCapture is null, cannot start recording")
+    }
+
+    private fun handleVideoRecordEvent(
+        recordEvent: VideoRecordEvent,
+        onVideoRecorded: (Uri?) -> Unit
+    ) {
+        when (recordEvent) {
+            is VideoRecordEvent.Start -> {
+                Log.d("VideoCapture", "Recording started")
+            }
+            is VideoRecordEvent.Finalize -> {
+                val outputUri = if (recordEvent.outputResults.outputUri != Uri.EMPTY) {
+                    recordEvent.outputResults.outputUri
+                } else {
+                    null
+                }
+                onVideoRecorded(outputUri)
+                stopCamera() // Unbind camera after recording finishes
             }
         }
     }
 
+    // Stop recording
     private fun stopRecording() {
         recording?.stop()
         recording = null
-        camera?.cameraControl?.enableTorch(false)
+        camera?.cameraControl?.enableTorch(false) // Disable torch
+        stopCamera()
+    }
+
+    // Stop and unbind the camera
+    private fun stopCamera() {
+        cameraProvider?.unbindAll()
+        cameraProvider = null
+        camera = null
+    }
+
+    // Proper cleanup to release camera resources
+    override fun onCleared() {
+        super.onCleared()
+        stopRecording()
+        stopCamera()
     }
 }
 

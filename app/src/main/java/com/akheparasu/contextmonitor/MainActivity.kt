@@ -12,15 +12,21 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.view.Surface
+import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -60,12 +66,12 @@ class MainActivity : ComponentActivity() {
                 ) { padding ->
                     NavHost(navController, startDestination = "first") {
                         composable("first") {
-                            ContextMonitorApp(
-                                navController = navController,
-                                heartRateModel = heartRateModel,
-                                respiratoryRateModel = respiratoryRateModel,
-                                padding = padding
-                            )
+                                ContextMonitorApp(
+                                    navController = navController,
+                                    heartRateModel = heartRateModel,
+                                    respiratoryRateModel = respiratoryRateModel,
+                                    padding = padding
+                                )
                         }
                         composable("second/{heartRate}/{respiratoryRate}") { backStackEntry ->
                             val heartRate = backStackEntry.arguments?.getInt("heartRate")
@@ -98,141 +104,197 @@ fun ContextMonitorApp(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val scrollState = rememberScrollState()
 
     var heartRate by rememberSaveable { mutableStateOf<Int?>(null) }
     var respiratoryRate by rememberSaveable { mutableStateOf<Int?>(null) }
 
-    var isCalculatingRR by rememberSaveable { mutableStateOf(false) }
-    var isCollectingRR by rememberSaveable { mutableStateOf(false) }
-
-    if (!isCollectingRR
-        && respiratoryRateModel.accelerometerValues.isNotEmpty()
-        && respiratoryRate == null
-    ) {
-        respiratoryRate = respiratoryRateCalculator(respiratoryRateModel.accelerometerValues)
-    }
-
-    val hasCameraPermission = ContextCompat.checkSelfPermission(
-        context,
-        Manifest.permission.CAMERA
-    ) == PackageManager.PERMISSION_GRANTED
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-
+    val hasCameraAndStoragePermissions by remember {
+        derivedStateOf {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
         }
     }
-    var isRecordingHR by rememberSaveable { mutableStateOf(false) }
-    var isCalculatingHR by rememberSaveable { mutableStateOf(false) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions.values.all { it }) {
+            Toast.makeText(context, "Required permissions are not granted", Toast.LENGTH_LONG)
+                .show()
+        }
+    }
+
+    var isCalculatingRR by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    val isCollectingRR by respiratoryRateModel.isCollecting
+    if (isCollectingRR) {
+        isCalculatingRR = false
+    }
+    if (!isCollectingRR && isCalculatingRR == false) {
+        isCalculatingRR = true
+        respiratoryRate = respiratoryRateCalculator(respiratoryRateModel.accelerometerValues)
+        respiratoryRateModel.clearValues()
+        isCalculatingRR = null
+    }
+
+    var isCollectingHR by rememberSaveable { mutableStateOf(false) }
+    var isCalculatingHR by rememberSaveable { mutableStateOf<Boolean?>(null) }
     var videoUri by rememberSaveable { mutableStateOf<Uri?>(null) }
 
     LaunchedEffect(videoUri) {
-        if (videoUri != null) {
+        if (videoUri != null && isCalculatingHR == false) {
+            isCalculatingHR = true
             heartRate = heartRateCalculator(videoUri!!, context.contentResolver)
-            isCalculatingHR = false
+            isCalculatingHR = null
         }
     }
-    // Register and unregister sensor listener
-//    DisposableEffect(SensorManager) {
-//        accelerometer?.let { sensor ->
-//            sensorManager.registerListener(sensorEventListener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
-//        }
-//        onDispose {
-//            respiratoryRateModelsensorManager?.unregisterListener(sensorEventListener)
-//        }
-//    }
+
+    val progressRR by respiratoryRateModel.progress
+    val progressHR by heartRateModel.progress
+    val progress = if (isCollectingHR) {
+        progressHR
+    } else if (isCollectingRR) {
+        progressRR
+    } else {
+        0
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(padding),
+            .padding(padding)
+            .verticalScroll(scrollState),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceAround
+        verticalArrangement = Arrangement.Center
     ) {
-        AndroidView(
-            factory = { context ->
-                PreviewView(context).apply {
-                    // Start the camera capture when the view is created
-                    if (isRecordingHR) {
-                    heartRateModel.startVideoCapture(
-                        contentResolver = context.contentResolver,
-                        lifecycleOwner = lifecycleOwner,
-                        surfaceProvider = surfaceProvider
-                    ) { uri ->
-                        videoUri = uri
-                        isRecordingHR = false
-                        isCalculatingHR = true
-                        Toast.makeText(context, "Video saved to: $uri", Toast.LENGTH_LONG).show()
-                    }
-                    }
-                }
-            },
+        CircularProgressIndicator(
+            color = Color.DarkGray,
+            trackColor = Color.Gray,
+            progress = { progress.toFloat() / 5 },
             modifier = Modifier
-                .size(64.dp)
-                .padding(vertical = 4.dp)
+                .size(80.dp)
+                .padding(vertical = 1.dp),
+            strokeWidth = 8.dp,
         )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Box(
+            modifier = Modifier
+                .size(192.dp)
+                .aspectRatio(1f)
+                .padding(vertical = 1.dp)
+        ) {
+            if (isCollectingHR) {
+                Surface (modifier = Modifier.fillMaxSize()) {
+                    AndroidView(
+                        factory = { ctx ->
+                            PreviewView(ctx).apply {
+                                if (isCollectingHR) {
+                                    heartRateModel.startVideoCapture(
+                                        contentResolver = context.contentResolver,
+                                        lifecycleOwner = lifecycleOwner,
+                                        surfaceProvider = surfaceProvider
+                                    ) { uri ->
+                                        videoUri = uri
+                                        isCollectingHR = false
+                                        isCalculatingHR = false
+                                        Toast.makeText(
+                                            context,
+                                            "Video saved to: $uri",
+                                            Toast.LENGTH_LONG
+                                        )
+                                            .show()
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+            else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize() // Set the size you want for the box
+                        .background(Color.Black) // Set the background color to black
+                )
+            }
+        }
         Text(
             text = "Heart Rate: " +
-                    if (isRecordingHR) {
+                    if (isCollectingHR) {
                         "Recording..."
-                    } else if (isCalculatingHR) {
+                    } else if (isCalculatingHR == true) {
                         "Calculating..."
                     } else {
                         heartRate?.toString() ?: "Not measured"
                     },
-            modifier = Modifier.padding(vertical = 4.dp)
+            modifier = Modifier.padding(vertical = 1.dp)
         )
         Button(
             onClick = {
-                if (!hasCameraPermission) {
-                    permissionLauncher.launch(Manifest.permission.CAMERA)
+                if (!hasCameraAndStoragePermissions) {
+                    permissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.CAMERA
+                        )
+                    )
                 } else {
-                    if (!isRecordingHR) {
-                        isRecordingHR = true
-                    }
+                    isCollectingHR = true
+                    videoUri = null
+                    heartRate = null
                 }
             },
-            modifier = Modifier.padding(vertical = 4.dp)
+            enabled = !isCollectingHR && isCalculatingHR == null && !isCollectingRR && isCalculatingRR == null,
+            modifier = Modifier.padding(vertical = 1.dp)
         ) {
             Text("MEASURE HEART RATE")
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Text(
             text = "Respiratory Rate: " +
                     if (isCollectingRR) {
                         "Collecting..."
-                    } else if (isCalculatingRR) {
+                    } else if (isCalculatingRR == true) {
                         "Calculating..."
                     } else {
                         respiratoryRate?.toString() ?: "Not measured"
-                    }
+                    },
+            modifier = Modifier.padding(vertical = 1.dp)
         )
-        Button(onClick = {
-            if (isCollectingRR) {
-                respiratoryRateModel.clearValues()
-            }
-            respiratoryRateModel.startAccelerometerDataCapture()
-        }) {
+        Button(
+            onClick = {
+                respiratoryRate = null
+                respiratoryRateModel.startAccelerometerDataCapture()
+                      },
+            enabled = !isCollectingHR && isCalculatingHR == null && !isCollectingRR && isCalculatingRR == null,
+            modifier = Modifier.padding(vertical = 1.dp)
+        ) {
             Text("MEASURE RESPIRATORY RATE")
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        Button(onClick = {
-            navController.navigate("second/$heartRate/$respiratoryRate")
-        }) {
+        Button(
+            onClick = { navController.navigate("second/$heartRate/$respiratoryRate") },
+            modifier = Modifier.padding(vertical = 1.dp),
+            enabled = heartRate != null && respiratoryRate != null,
+        ) {
             Text("UPLOAD SIGNS")
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        Button(onClick = {
-            navController.navigate("third")
-        }) {
-            Text("SYMPTOMS")
+        Button(
+            onClick = { navController.navigate("third") },
+            modifier = Modifier.padding(vertical = 1.dp),
+            enabled = !isCollectingHR && isCalculatingHR == null && !isCollectingRR && isCalculatingRR == null,
+        ) {
+            Text("VIEW PAST RECORDS")
         }
     }
 }
