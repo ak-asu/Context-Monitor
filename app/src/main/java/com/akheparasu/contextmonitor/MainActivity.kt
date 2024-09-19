@@ -182,9 +182,9 @@ fun ContextMonitorApp(
         0
     }
 
-    // For consistent calculations, orientation is fixed when collecting data
+    // For consistent calculations, orientation is fixed when collecting and calculating data
     val activity = LocalContext.current as Activity
-    if (isCollectingHR || isCollectingRR) {
+    if (isCollectingHR || isCollectingRR || isCalculatingHR==true || isCalculatingRR==true) {
         activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
     } else {
         activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
@@ -245,10 +245,13 @@ fun ContextMonitorApp(
                 }
             } else {
                 Box(
+                    contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .fillMaxSize() // Set the size you want for the box
-                        .background(Color.Black) // Set the background color to black
-                )
+                        .fillMaxSize()
+                        .background(Color.Black)
+                ) {
+                    Text("Preview Off", color = Color.White)
+                }
             }
         }
         Text(
