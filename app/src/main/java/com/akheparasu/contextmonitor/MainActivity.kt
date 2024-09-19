@@ -77,16 +77,16 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable("second/{heartRate}/{respiratoryRate}") { backStackEntry ->
-                            val heartRate = backStackEntry.arguments?.getInt("heartRate")
+                            val heartRate = backStackEntry.arguments?.getString("heartRate")
                             val respiratoryRate =
-                                backStackEntry.arguments?.getInt("respiratoryRate")
+                                backStackEntry.arguments?.getString("respiratoryRate")
                             if (heartRate != null && respiratoryRate != null) {
                                 AddSymptomsScreen(
                                     navController = navController,
                                     viewModel = addSymptomModel,
                                     padding = padding,
-                                    heartRate = heartRate,
-                                    respiratoryRate = respiratoryRate
+                                    heartRate = heartRate.toInt(),
+                                    respiratoryRate = respiratoryRate.toInt()
                                 )
                             } else {
                                 Snackbar(
